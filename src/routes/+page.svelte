@@ -3,9 +3,18 @@
 let password = ''
 
 function handlePasswordLogin() {
+    // validate password
     if (password.length > 0){
+        // TODO: send request to BE and validate the passwrod
         alert(`Logging in with password`)
     }
+    else {
+        alert(`Password is incorrect`)
+    }
+}
+
+function handleGuestLogin() {
+    alert(`Logged in as Guest`)
 }
 
 
@@ -23,8 +32,17 @@ function handlePasswordLogin() {
             bind:value={password}
         />
     </div>
-    <div class="guess-card">
-
+    <div class="action-card">
+        <div class="real-user-action">
+            <button class="user-login-button" on:click={handlePasswordLogin}>
+                Login
+            </button>
+        </div>
+        <div class="guest-action">
+            <button class="guest-login-button" on:click={handleGuestLogin}>
+                Continue without Password
+            </button>
+        </div>
     </div>
 </div>
 
