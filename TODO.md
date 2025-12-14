@@ -11,4 +11,4 @@ Q. how to handle routing in Svelte?
 A.
 
 Q. How does Svelte handle the DOM?
-A. 
+A.  
