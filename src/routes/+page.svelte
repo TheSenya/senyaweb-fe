@@ -1,56 +1,93 @@
 <script>
-    import { goto } from '$app/navigation';
+    import { goto } from "$app/navigation";
+    import { onMount } from "svelte";
+    import { PUBLIC_BACKEND_URL } from "$env/static/public";
 
-    let password = '';
+    let backendMessage = "Connecting...";
 
-    function handlePasswordLogin() {
+    onMount(async () => {
+        try {
+            console.log("Fetching from:", PUBLIC_BACKEND_URL);
+            const res = await fetch(`${PUBLIC_BACKEND_URL}/`);
+            const data = await res.json();
+            console.log(data);
+            backendMessage = data.message;
+        } catch (e) {
+            console.error(e);
+            backendMessage = "Error connecting to backend";
+        }
+    });
+
+    let password = "";
+
+    async function handlePasswordLogin() {
         // validate password
-        if (password.length > 0) {
-            // TODO: send request to BE and validate the password
-            goto('/home?role=user');
-        } else {
+        try {
+            const res = await fetch(`${PUBLIC_BACKEND_URL}/auth/passcode`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ password }),
+            });
+            const data = await res.json();
+            console.log(data);
+            if (data.success) {
+                goto("/home?role=user");
+            } else {
+                alert(`Password is incorrect`);
+            }
+        } catch (e) {
+            console.error(e);
             alert(`Password is incorrect`);
         }
     }
 
-    function handleGuestLogin() {
-        goto('/home?role=guest');
+    async function handleGuestLogin() {
+        goto("/home?role=guest");
     }
-
 </script>
 
 <main>
-<h1 class="welcome">Welcome to SenyaWeb</h1>
-<div class="access-card">
-    <div class=password-card>
-        <label for="password">Password</label>
-        <input
-            type="password"
-            id="password"
-            placeholder="Enter Password..."
-            bind:value={password}
-        />
-    </div>
-    <div class="action-card">
-        <div class="real-user-action">
-            <button class="user-login-button" on:click={handlePasswordLogin}>
-                Login
-            </button>
+    <h1 class="welcome">Welcome to SenyaWeb</h1>
+    <div class="access-card">
+        <div class="password-card">
+            <label for="password">Password</label>
+            <input
+                type="password"
+                id="password"
+                placeholder="Enter Password..."
+                bind:value={password}
+            />
         </div>
-        <div class="guest-action">
-            <button class="guest-login-button" on:click={handleGuestLogin}>
-                Continue without Password
-            </button>
+        <div class="action-card">
+            <div class="real-user-action">
+                <button
+                    class="user-login-button"
+                    on:click={handlePasswordLogin}
+                >
+                    Login
+                </button>
+            </div>
+            <div class="guest-action">
+                <button class="guest-login-button" on:click={handleGuestLogin}>
+                    Continue without Password
+                </button>
+            </div>
+            <p
+                style="text-align: center; margin-top: 1rem; color: #6b7280; font-size: 0.875rem;"
+            >
+                Backend says: {backendMessage}
+            </p>
         </div>
     </div>
-</div>
-
 </main>
 
 <style>
     :global(body) {
         margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+            Helvetica, Arial, sans-serif;
         background-color: #f3f4f6;
     }
 
@@ -77,7 +114,9 @@
         padding: 2rem;
         background-color: white;
         border-radius: 1rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        box-shadow:
+            0 4px 6px -1px rgba(0, 0, 0, 0.1),
+            0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
 
     .password-card {
@@ -99,7 +138,9 @@
         border-radius: 0.5rem;
         font-size: 1rem;
         box-sizing: border-box;
-        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+        transition:
+            border-color 0.15s ease-in-out,
+            box-shadow 0.15s ease-in-out;
     }
 
     input:focus {
