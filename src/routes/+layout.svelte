@@ -1,5 +1,26 @@
 <script>
     import { page } from "$app/stores";
+    import { goto } from "$app/navigation";
+    import { PUBLIC_BACKEND_URL } from "$env/static/public";
+
+    async function handleLogout() {
+        try {
+            const response = await fetch(`${PUBLIC_BACKEND_URL}/auth/logout`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (response.ok) {
+                goto("/");
+            } else {
+                console.error("Logout failed");
+            }
+        } catch (error) {
+            console.error("Error during logout:", error);
+        }
+    }
 </script>
 
 <div class="app-container">
@@ -16,6 +37,7 @@
                 href="/notes"
                 class:active={$page.url.pathname.startsWith("/notes")}>Notes</a
             >
+            <button class="logout-btn" on:click={handleLogout}>Logout</button>
         </div>
     </nav>
 
@@ -80,6 +102,26 @@
     .links a.active {
         color: #2563eb;
         background-color: #eff6ff;
+    }
+
+    .logout-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #4b5563;
+        font-weight: 500;
+        font-size: 0.95rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 0.375rem;
+        transition:
+            color 0.15s ease-in-out,
+            background-color 0.15s ease-in-out;
+        font-family: inherit;
+    }
+
+    .logout-btn:hover {
+        color: #ef4444; /* Red color for logout hover */
+        background-color: #fef2f2;
     }
 
     .content {
