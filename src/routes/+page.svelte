@@ -1,38 +1,34 @@
 <script>
     import { goto } from "$app/navigation";
     import { onMount } from "svelte";
-    import { PUBLIC_BACKEND_URL } from "$env/static/public";
+    import { login } from "../stores/auth.js";
 
-    let backendMessage = "Connecting...";
+    let backendMessage = "Connecting... (Mock)";
 
     onMount(async () => {
-        try {
-            console.log("Fetching from:", PUBLIC_BACKEND_URL);
-            const res = await fetch(`${PUBLIC_BACKEND_URL}/`);
-            const data = await res.json();
-            console.log(data);
-            backendMessage = data.message;
-        } catch (e) {
-            console.error(e);
-            backendMessage = "Error connecting to backend";
-        }
+        // Mock backend connection
+        backendMessage = "Connected to Client-Side Mock";
     });
 
     let password = "";
 
     async function handlePasswordLogin() {
-        // validate password
+        if (!password) {
+            alert("Please enter a password");
+            return;
+        }
+
         try {
-            const res = await fetch(`${PUBLIC_BACKEND_URL}/auth/passcode`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ password }),
-            });
-            const data = await res.json();
-            console.log(data);
-            if (data.success) {
+            // Mock backend call
+            console.log("Verifying password...");
+            await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay
+
+            // For now, accept any password or specific one if desired, but user didn't specify.
+            // Let's just say success for any non-empty password.
+            const success = true;
+
+            if (success) {
+                login({ role: "user", username: "User" });
                 goto("/home?role=user");
             } else {
                 alert(`Password is incorrect`);
@@ -44,13 +40,18 @@
     }
 
     async function handleGuestLogin() {
+        // Mock backend call
+        console.log("Logging in as guest...");
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        login({ role: "guest", username: "Guest" });
         goto("/home?role=guest");
     }
 </script>
 
 <main>
     <h1 class="welcome">Welcome to SenyaWeb</h1>
-    <div class="access-card">
+    <form class="access-card" on:submit|preventDefault={handlePasswordLogin}>
         <div class="password-card">
             <label for="password">Password</label>
             <input
@@ -62,15 +63,14 @@
         </div>
         <div class="action-card">
             <div class="real-user-action">
-                <button
-                    class="user-login-button"
-                    on:click={handlePasswordLogin}
-                >
-                    Login
-                </button>
+                <button class="user-login-button" type="submit"> Login </button>
             </div>
             <div class="guest-action">
-                <button class="guest-login-button" on:click={handleGuestLogin}>
+                <button
+                    class="guest-login-button"
+                    type="button"
+                    on:click={handleGuestLogin}
+                >
                     Continue without Password
                 </button>
             </div>
@@ -80,7 +80,7 @@
                 Backend says: {backendMessage}
             </p>
         </div>
-    </div>
+    </form>
 </main>
 
 <style>

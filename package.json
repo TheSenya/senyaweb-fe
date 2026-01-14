@@ -36,6 +36,7 @@
 		"@sveltejs/kit": "^2.48.5",
 		"@sveltejs/package": "^2.5.6",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
+		"cheerio": "^1.1.2",
 		"publint": "^0.3.15",
 		"svelte": "^5.43.8",
 		"svelte-check": "^4.3.4",

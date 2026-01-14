@@ -1,25 +1,27 @@
 <script>
     import { page } from "$app/stores";
     import { goto } from "$app/navigation";
-    import { PUBLIC_BACKEND_URL } from "$env/static/public";
+    import { auth, logout } from "../stores/auth.js";
+    import { onMount } from "svelte";
+    import { setupAuthGuard } from "$lib/guards.js";
+
+    // Setup navigation guard to prevent unauthorized access
+    setupAuthGuard(auth);
+
+    // Initial check for direct access (e.g. typing URL)
+    onMount(() => {
+        if (!$auth.isAuthenticated && $page.url.pathname !== "/") {
+            goto("/");
+        }
+    });
 
     async function handleLogout() {
-        try {
-            const response = await fetch(`${PUBLIC_BACKEND_URL}/auth/logout`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-            });
+        // Mock backend call placeholder
+        console.log("Logging out...");
+        await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay
 
-            if (response.ok) {
-                goto("/");
-            } else {
-                console.error("Logout failed");
-            }
-        } catch (error) {
-            console.error("Error during logout:", error);
-        }
+        logout(); // clear store
+        goto("/"); // Redirect to login
     }
 </script>
 
@@ -30,8 +32,9 @@
         </div>
         <div class="links">
             <!-- Basic navigation links -->
-            <a href="/home" class:active={$page.url.pathname === "/home"}
-                >Home</a
+            <a
+                href="/news"
+                class:active={$page.url.pathname.startsWith("/news")}>News</a
             >
             <a
                 href="/notes"
