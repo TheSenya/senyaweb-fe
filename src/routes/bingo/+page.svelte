@@ -52,10 +52,9 @@
 
             if (credRes.ok) {
                 const data = await credRes.json();
-                console.log(credRes);
                 // API returns { data: { usage: ..., limit: ..., ... } }
-                if (data.data) {
-                    credits = data.data;
+                if (data.credits) {
+                    credits = data.credits;
                 }
             }
 
