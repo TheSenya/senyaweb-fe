@@ -33,6 +33,10 @@
         <div class="links">
             <!-- Basic navigation links -->
             <a
+                href="/bingo"
+                class:active={$page.url.pathname.startsWith("/bingo")}>Bingo</a
+            >
+            <a
                 href="/news"
                 class:active={$page.url.pathname.startsWith("/news")}>News</a
             >

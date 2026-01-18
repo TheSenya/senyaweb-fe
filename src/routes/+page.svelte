@@ -2,12 +2,23 @@
     import { goto } from "$app/navigation";
     import { onMount } from "svelte";
     import { login } from "../stores/auth.js";
+    import { PUBLIC_BACKEND_URL } from "$env/static/public";
 
-    let backendMessage = "Connecting... (Mock)";
+    let backendMessage = "Connecting...";
 
     onMount(async () => {
-        // Mock backend connection
-        backendMessage = "Connected to Client-Side Mock";
+        try {
+            const res = await fetch(`${PUBLIC_BACKEND_URL}/health`);
+            if (res.ok) {
+                const data = await res.json();
+                backendMessage = "Connected to Backend";
+            } else {
+                backendMessage = "Backend connection failed";
+            }
+        } catch (e) {
+            console.error(e);
+            backendMessage = "Backend not reachable";
+        }
     });
 
     let password = "";
@@ -19,15 +30,17 @@
         }
 
         try {
-            // Mock backend call
-            console.log("Verifying password...");
-            await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay
+            const res = await fetch(`${PUBLIC_BACKEND_URL}/auth/passcode`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ passcode: password }),
+            });
 
-            // For now, accept any password or specific one if desired, but user didn't specify.
-            // Let's just say success for any non-empty password.
-            const success = true;
+            const data = await res.json();
 
-            if (success) {
+            if (data.success) {
                 login({ role: "user", username: "User" });
                 goto("/home?role=user");
             } else {
@@ -35,15 +48,12 @@
             }
         } catch (e) {
             console.error(e);
-            alert(`Password is incorrect`);
+            alert(`Login failed: ${e.message}`);
         }
     }
 
     async function handleGuestLogin() {
-        // Mock backend call
-        console.log("Logging in as guest...");
-        await new Promise((resolve) => setTimeout(resolve, 500));
-
+        // Guest login doesn't need backend verification for now
         login({ role: "guest", username: "Guest" });
         goto("/home?role=guest");
     }

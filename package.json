@@ -53,5 +53,8 @@
 		"@rollup/rollup-linux-x64-gnu": "^4.32.0",
 		"@rollup/rollup-win32-arm64-msvc": "^4.32.0",
 		"@rollup/rollup-win32-x64-msvc": "^4.32.0"
+	},
+	"dependencies": {
+		"marked": "^17.0.1"
 	}
 }
