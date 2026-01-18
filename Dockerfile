@@ -7,9 +7,7 @@ COPY . .
 
 # Add build arguments for static env vars
 ARG PUBLIC_BACKEND_URL
-ARG ORIGIN
 ENV PUBLIC_BACKEND_URL=$PUBLIC_BACKEND_URL
-ENV ORIGIN=$ORIGIN
 
 # This creates the 'build' folder
 RUN npm run build 

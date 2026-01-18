@@ -18,8 +18,11 @@
     let isLoading = false;
 
     // Model selection
-    let availableModels = [];
+    let geminiModels = [];
+    let openRouterModels = []; // Array of objects {id, name, pricing}
+    let selectedProvider = "gemini"; // 'gemini' | 'openrouter'
     let selectedModel = "";
+    let credits = null; // Account credits info
 
     // UI References
     let chatContainer;
@@ -29,18 +32,37 @@
     // =========================================================================
 
     onMount(async () => {
-        // Fetch available models
+        // Fetch available models and credits
         try {
-            const res = await fetch(`${PUBLIC_BACKEND_URL}/bingo/models`);
-            if (res.ok) {
-                const data = await res.json();
-                availableModels = data.models || [];
-                if (availableModels.length > 0) {
-                    selectedModel = availableModels[0];
+            const [gemRes, orRes, credRes] = await Promise.all([
+                fetch(`${PUBLIC_BACKEND_URL}/bingo/gem_models`),
+                fetch(`${PUBLIC_BACKEND_URL}/bingo/or_models`),
+                fetch(`${PUBLIC_BACKEND_URL}/bingo/credits`),
+            ]);
+
+            if (gemRes.ok) {
+                const data = await gemRes.json();
+                geminiModels = data.models || [];
+            }
+
+            if (orRes.ok) {
+                const data = await orRes.json();
+                openRouterModels = data.models || [];
+            }
+
+            if (credRes.ok) {
+                const data = await credRes.json();
+                console.log(credRes);
+                // API returns { data: { usage: ..., limit: ..., ... } }
+                if (data.data) {
+                    credits = data.data;
                 }
             }
+
+            // Set default model based on default provider
+            updateSelectedModel();
         } catch (e) {
-            console.error("Failed to fetch models", e);
+            console.error("Failed to fetch data", e);
         }
 
         // For now, add a welcome message locally
@@ -52,6 +74,18 @@
             },
         ];
     });
+
+    function updateSelectedModel() {
+        if (selectedProvider === "gemini") {
+            selectedModel = geminiModels.length > 0 ? geminiModels[0] : "";
+        } else {
+            selectedModel =
+                openRouterModels.length > 0 ? openRouterModels[0].id : "";
+        }
+    }
+
+    // Helper to get current OpenRouter model object
+    $: currentORModel = openRouterModels.find((m) => m.id === selectedModel);
 
     afterUpdate(() => {
         // Default behavior: Keep chat scrolled to bottom if we are near the bottom
@@ -107,44 +141,51 @@
             // =================================================================
             // BACKEND INTEGRATION POINT
             // =================================================================
-            const response = await fetch(`${PUBLIC_BACKEND_URL}/bingo/send`, {
+            const res = await fetch(`${PUBLIC_BACKEND_URL}/bingo/send`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: text, model: selectedModel }),
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    message: text,
+                    model: selectedModel,
+                    provider: selectedProvider,
+                }),
             });
 
-            if (!response.ok) {
-                throw new Error(`Server error: ${response.status}`);
+            if (res.ok) {
+                const data = await res.json();
+                // 4. Add AI response
+                messages = [
+                    ...messages,
+                    { sender: "ai", text: data.message, timestamp: new Date() },
+                ];
+            } else {
+                console.error("Failed to send message");
+                messages = [
+                    ...messages,
+                    {
+                        sender: "ai",
+                        text: "Sorry, I encountered an error.",
+                        timestamp: new Date(),
+                    },
+                ];
             }
-
-            const data = await response.json();
-
-            // 4. Add AI response to the list
+        } catch (e) {
+            console.error("Error sending message", e);
             messages = [
                 ...messages,
                 {
                     sender: "ai",
-                    text: data.message,
-                    timestamp: new Date(),
-                },
-            ];
-
-            // Scroll to bottom after AI response to show the answer
-            await tick();
-            scrollToBottom();
-        } catch (error) {
-            console.error("Failed to send message:", error);
-            // Handle error (e.g., show a toast notification or an error message in chat)
-            messages = [
-                ...messages,
-                {
-                    sender: "system",
-                    text: "Error: Could not connect to Bingo.",
+                    text: "Sorry, I couldn't reach the server.",
                     timestamp: new Date(),
                 },
             ];
         } finally {
             isLoading = false;
+            // Scroll to bottom to read the answer
+            await tick();
+            scrollToBottom();
         }
     }
 
@@ -164,21 +205,66 @@
     TEMPLATE STRUCTURE
     =========================================================================
 -->
-<div class="chat-container">
+<div class="chat-layout">
     <header class="chat-header">
-        <h1>Takls me</h1>
-        <p>Your personal assistant</p>
+        <div class="header-left">
+            <h2>Bingo AI</h2>
+            {#if credits}
+                <div class="credits-display">
+                    <span class="label">Usage:</span> ${Number(
+                        credits.total_usage,
+                    ).toFixed(2)}
+                    {#if credits.total_credits}
+                        <span class="divider">/</span>
+                        <span class="label">Limit:</span>
+                        ${Number(credits.total_credits).toFixed(2)}
+                        <span class="remaining"
+                            >(${(
+                                credits.total_credits - credits.total_usage
+                            ).toFixed(2)} left)</span
+                        >
+                    {/if}
+                </div>
+            {/if}
 
-        <div class="model-selector">
-            <select
-                bind:value={selectedModel}
-                disabled={availableModels.length === 0}
-            >
-                {#each availableModels as model}
-                    <option value={model}>{model.replace("models/", "")}</option
+            <div class="model-selectors-group">
+                <div class="model-selectors">
+                    <!-- Provider Selector -->
+                    <select
+                        bind:value={selectedProvider}
+                        on:change={updateSelectedModel}
+                        class="model-select provider-select"
                     >
-                {/each}
-            </select>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openrouter">OpenRouter</option>
+                    </select>
+
+                    <!-- Model Selector -->
+                    <select bind:value={selectedModel} class="model-select">
+                        {#if selectedProvider === "gemini"}
+                            {#each geminiModels as model}
+                                <option value={model}
+                                    >{model.replace("models/", "")}</option
+                                >
+                            {/each}
+                        {:else}
+                            {#each openRouterModels as model}
+                                <option value={model.id}>{model.name}</option>
+                            {/each}
+                        {/if}
+                    </select>
+                </div>
+                {#if selectedProvider === "openrouter" && currentORModel && currentORModel.pricing}
+                    <div class="pricing-info">
+                        <span class="price-tag"
+                            >Input: ${currentORModel.pricing.prompt}</span
+                        >
+                        <span class="price-tag"
+                            >Output: ${currentORModel.pricing.completion}</span
+                        >
+                    </div>
+                {/if}
+            </div>
         </div>
     </header>
 
@@ -244,7 +330,7 @@
      * Designed to be clean and minimal. 
     */
 
-    .chat-container {
+    .chat-layout {
         display: flex;
         flex-direction: column;
         height: calc(
@@ -259,31 +345,95 @@
 
     .chat-header {
         padding: 1rem;
+        background-color: white;
         border-bottom: 1px solid #e5e7eb;
-        background-color: #f9fafb;
-        text-align: center;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 
-    .chat-header h1 {
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        flex: 1;
+        flex-wrap: wrap; /* Allow wrapping on small screens */
+    }
+
+    .header-left h2 {
         margin: 0;
         font-size: 1.25rem;
+        font-weight: 600;
         color: #111827;
+        white-space: nowrap;
+        margin-right: 1rem;
     }
 
-    .chat-header p {
-        margin: 0;
-        font-size: 0.875rem;
+    .credits-display {
+        font-size: 0.8rem;
+        color: #4b5563;
+        background-color: #f3f4f6;
+        padding: 0.25rem 0.6rem;
+        border-radius: 1rem;
+        border: 1px solid #e5e7eb;
+        display: flex;
+        gap: 0.3rem;
+        align-items: center;
+        white-space: nowrap;
+    }
+
+    .credits-display .label {
+        font-weight: 500;
         color: #6b7280;
-        margin-bottom: 0.5rem;
     }
 
-    .model-selector select {
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.375rem;
+    .credits-display .remaining {
+        color: #10b981; /* Green for remaining */
+        font-weight: 600;
+    }
+
+    .model-selectors-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        flex: 1;
+        max-width: 500px;
+    }
+
+    .model-selectors {
+        display: flex;
+        gap: 0.5rem;
+        width: 100%;
+    }
+
+    .model-select {
+        padding: 0.5rem;
         border: 1px solid #d1d5db;
+        border-radius: 0.375rem;
         font-size: 0.875rem;
-        color: #374151;
         background-color: white;
+        cursor: pointer;
+        flex: 1;
+        min-width: 0; /* Allow flex shrinking */
+    }
+
+    .provider-select {
+        flex: 0 0 140px; /* Fixed width for provider */
+    }
+
+    .pricing-info {
+        display: flex;
+        gap: 0.8rem;
+        font-size: 0.75rem;
+        color: #6b7280;
+        padding-left: 0.2rem;
+    }
+
+    .price-tag {
+        background-color: #eff6ff;
+        color: #1d4ed8;
+        padding: 0.1rem 0.4rem;
+        border-radius: 0.25rem;
     }
 
     .messages-area {
