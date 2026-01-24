@@ -1,8 +1,9 @@
-<script>
+<script lang="ts">
     import { goto } from "$app/navigation";
     import { onMount } from "svelte";
     import { login } from "../stores/auth.js";
     import { PUBLIC_BACKEND_URL } from "$env/static/public";
+    import { encryptRequest, decryptResponse } from "$lib/encryption";
 
     let backendMessage = "Connecting...";
 
@@ -30,23 +31,47 @@
         }
 
         try {
+            // 1. Encrypt the payload
+            const { encryptedContent, clientPrivateKey } = await encryptRequest({ passcode: password });
+
             const res = await fetch(`${PUBLIC_BACKEND_URL}/auth/passcode`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify({ passcode: password }),
+                body: JSON.stringify({ content: encryptedContent }),
             });
 
-            const data = await res.json();
+            const body = await res.json();
 
-            if (data.success) {
-                login({ role: "user", username: "User" });
-                goto("/home?role=user");
+            // 2. Decrypt the response (if it contains encrypted content)
+            // The middleware encrypts ALL responses from the endpoint, even errors.
+            // Handshake errors (400/403) from middleware itself might be plain text, 
+            // but let's check for 'content' key.
+            
+            let data;
+            if (body.content) {
+                data = await decryptResponse(body.content, clientPrivateKey);
             } else {
-                alert(`Password is incorrect`);
+                // Fallback for plain error messages (e.g. middleware rejection)
+                data = body; 
             }
-        } catch (e) {
+
+            if (res.ok) {
+                 // data should contain success: true or token, etc.
+                 // Actually the backend endpoint for /auth/passcode returns what?
+                 // Based on tests it returns { "detail": "..." } or success.
+                 // Let's assume logic similar to previous code: data.success
+                 if (data.success || data.detail === "Correct passcode") {
+                    login({ role: "user", username: "User" });
+                    goto("/home?role=user");
+                 } else {
+                     alert("Unexpected response");
+                 }
+            } else {
+                alert(data.detail || "Login failed");
+            }
+        } catch (e: any) {
             console.error(e);
             alert(`Login failed: ${e.message}`);
         }
