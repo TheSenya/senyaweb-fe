@@ -1,24 +1,18 @@
 import { writable } from 'svelte/store';
-import { browser } from '$app/environment';
 
-// Initial state
+/**
+ * @typedef {Object} AuthState
+ * @property {object|null} user
+ * @property {boolean} isAuthenticated
+ */
+
+/** @type {AuthState} */
 const initialState = {
     user: null,
     isAuthenticated: false
 };
 
-// Retrieve from localStorage if available
-const storedAuth = browser ? localStorage.getItem('auth') : null;
-const initialAuth = storedAuth ? JSON.parse(storedAuth) : initialState;
-
-export const auth = writable(initialAuth);
-
-// Subscribe to store changes and update localStorage
-auth.subscribe((value) => {
-    if (browser) {
-        localStorage.setItem('auth', JSON.stringify(value));
-    }
-});
+export const auth = writable(initialState);
 
 /**
  * Login action
@@ -36,7 +30,4 @@ export const login = (userData) => {
  */
 export const logout = () => {
     auth.set(initialState);
-    if (browser) {
-        localStorage.removeItem('auth');
-    }
 };
