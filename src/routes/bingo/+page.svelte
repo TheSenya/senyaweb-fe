@@ -1,7 +1,7 @@
 <script>
     import { onMount, afterUpdate, tick } from "svelte";
-    import { PUBLIC_BACKEND_URL } from "$env/static/public";
     import { marked } from "marked";
+    import api from "$lib/api";
 
     // =========================================================================
     // STATE MANAGEMENT
@@ -32,31 +32,18 @@
     // =========================================================================
 
     onMount(async () => {
-        // Fetch available models and credits
+        // Fetch available models and credits - encryption is automatic!
         try {
             const [gemRes, orRes, credRes] = await Promise.all([
-                fetch(`${PUBLIC_BACKEND_URL}/bingo/gem_models`),
-                fetch(`${PUBLIC_BACKEND_URL}/bingo/or_models`),
-                fetch(`${PUBLIC_BACKEND_URL}/bingo/credits`),
+                api.get("/bingo/gem_models"),
+                api.get("/bingo/or_models"),
+                api.get("/bingo/credits"),
             ]);
 
-            if (gemRes.ok) {
-                const data = await gemRes.json();
-                geminiModels = data.models || [];
-            }
-
-            if (orRes.ok) {
-                const data = await orRes.json();
-                openRouterModels = data.models || [];
-            }
-
-            if (credRes.ok) {
-                const data = await credRes.json();
-                // API returns { data: { usage: ..., limit: ..., ... } }
-                if (data.credits) {
-                    credits = data.credits;
-                }
-            }
+            if (gemRes.ok) geminiModels = gemRes.data.models || [];
+            if (orRes.ok) openRouterModels = orRes.data.models || [];
+            if (credRes.ok && credRes.data.credits)
+                credits = credRes.data.credits;
 
             // Set default model based on default provider
             updateSelectedModel();
@@ -138,29 +125,25 @@
 
         try {
             // =================================================================
-            // BACKEND INTEGRATION POINT
+            // BACKEND INTEGRATION POINT - Encryption is automatic via api module
             // =================================================================
-            const res = await fetch(`${PUBLIC_BACKEND_URL}/bingo/send`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    message: text,
-                    model: selectedModel,
-                    provider: selectedProvider,
-                }),
+            const res = await api.post("/bingo/send", {
+                message: text,
+                model: selectedModel,
+                provider: selectedProvider,
             });
 
+            // 4. Add AI response
             if (res.ok) {
-                const data = await res.json();
-                // 4. Add AI response
                 messages = [
                     ...messages,
-                    { sender: "ai", text: data.message, timestamp: new Date() },
+                    {
+                        sender: "ai",
+                        text: res.data.message,
+                        timestamp: new Date(),
+                    },
                 ];
             } else {
-                console.error("Failed to send message");
                 messages = [
                     ...messages,
                     {

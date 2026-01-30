@@ -22,19 +22,72 @@
         }
     });
 
+    let email = "";
     let password = "";
+    let isRegistering = false;
 
-    async function handlePasswordLogin() {
+    // Error states
+    let emailError = "";
+    let passwordError = "";
+    let generalError = "";
+
+    function validateEmail() {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email) {
+            emailError = "Email is required";
+            return false;
+        } else if (!emailRegex.test(email)) {
+            emailError = "Please enter a valid email address";
+            return false;
+        }
+        emailError = "";
+        return true;
+    }
+
+    function validatePassword() {
         if (!password) {
-            alert("Please enter a password");
+            passwordError = "Password is required";
+            return false;
+        } else if (password.length < 6) {
+            passwordError = "Password must be at least 6 characters";
+            return false;
+        }
+        passwordError = "";
+        return true;
+    }
+
+    function validate() {
+        // Run both to set errors
+        const isEmailValid = validateEmail();
+        const isPasswordValid = validatePassword();
+        return isEmailValid && isPasswordValid;
+    }
+
+    async function handleSubmit() {
+        generalError = "";
+
+        if (!validate()) {
+            generalError = "Please check your input.";
             return;
         }
 
+        console.log("Starting login process...");
+        console.log(
+            "Endpoint:",
+            isRegistering ? "/auth/register" : "/auth/login",
+        );
+
+        const endpoint = isRegistering ? "/auth/register" : "/auth/login";
+
         try {
             // 1. Encrypt the payload
-            const { encryptedContent, clientPrivateKey } = await encryptRequest({ passcode: password });
+            console.log("Encrypting payload...");
+            const { encryptedContent, clientPrivateKey } = await encryptRequest(
+                { email, password },
+            );
+            console.log("Payload encrypted. Sending request...");
 
-            const res = await fetch(`${PUBLIC_BACKEND_URL}/auth/passcode`, {
+            const res = await fetch(`${PUBLIC_BACKEND_URL}${endpoint}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -44,74 +97,116 @@
 
             const body = await res.json();
 
-            // 2. Decrypt the response (if it contains encrypted content)
-            // The middleware encrypts ALL responses from the endpoint, even errors.
-            // Handshake errors (400/403) from middleware itself might be plain text, 
-            // but let's check for 'content' key.
-            
+            // 2. Decrypt the response
             let data;
             if (body.content) {
                 data = await decryptResponse(body.content, clientPrivateKey);
             } else {
-                // Fallback for plain error messages (e.g. middleware rejection)
-                data = body; 
+                data = body;
             }
 
             if (res.ok) {
-                 // data should contain success: true or token, etc.
-                 // Actually the backend endpoint for /auth/passcode returns what?
-                 // Based on tests it returns { "detail": "..." } or success.
-                 // Let's assume logic similar to previous code: data.success
-                 if (data.success || data.detail === "Correct passcode") {
-                    login({ role: "user", username: "User" });
-                    goto("/home?role=user");
-                 } else {
-                     alert("Unexpected response");
-                 }
+                if (data.success) {
+                    // Auto-login after register, or normal login
+                    login({ role: "user", username: email });
+                    goto("/home");
+                } else {
+                    generalError = isRegistering
+                        ? "Registration failed"
+                        : "Login failed";
+                }
             } else {
-                alert(data.detail || "Login failed");
+                const detail = data.detail || "";
+
+                if (detail.includes("Email already registered")) {
+                    emailError = detail;
+                } else {
+                    generalError =
+                        detail ||
+                        (isRegistering
+                            ? "Registration failed"
+                            : "Login failed");
+                }
             }
         } catch (e: any) {
             console.error(e);
-            alert(`Login failed: ${e.message}`);
+            generalError = `Connection Error: ${e.message}`;
         }
     }
 
-    async function handleGuestLogin() {
-        // Guest login doesn't need backend verification for now
-        login({ role: "guest", username: "Guest" });
-        goto("/home?role=guest");
+    function toggleMode() {
+        isRegistering = !isRegistering;
+        email = "";
+        password = "";
+        emailError = "";
+        passwordError = "";
+        generalError = "";
     }
 </script>
 
 <main>
     <h1 class="welcome">Welcome to SenyaWeb</h1>
-    <form class="access-card" on:submit|preventDefault={handlePasswordLogin}>
-        <div class="password-card">
+    <form class="access-card" on:submit|preventDefault={handleSubmit}>
+        <h2 class="form-title">{isRegistering ? "Create Account" : "Login"}</h2>
+
+        <div class="input-group">
+            <label for="email">Email</label>
+            <input
+                type="email"
+                id="email"
+                placeholder="Enter Email..."
+                bind:value={email}
+                on:blur={validateEmail}
+                on:input={() => emailError && validateEmail()}
+                class:invalid={emailError}
+            />
+            {#if emailError}
+                <span class="error-msg">{emailError}</span>
+            {/if}
+        </div>
+        <div class="input-group">
             <label for="password">Password</label>
             <input
                 type="password"
                 id="password"
                 placeholder="Enter Password..."
                 bind:value={password}
+                on:blur={validatePassword}
+                on:input={() => passwordError && validatePassword()}
+                class:invalid={passwordError}
             />
+            {#if passwordError}
+                <span class="error-msg">{passwordError}</span>
+            {/if}
         </div>
+
+        {#if generalError}
+            <div class="general-error">{generalError}</div>
+        {/if}
+
         <div class="action-card">
             <div class="real-user-action">
-                <button class="user-login-button" type="submit"> Login </button>
-            </div>
-            <div class="guest-action">
-                <button
-                    class="guest-login-button"
-                    type="button"
-                    on:click={handleGuestLogin}
-                >
-                    Continue without Password
+                <button class="user-login-button" type="submit">
+                    {isRegistering ? "Register" : "Login"}
                 </button>
             </div>
-            <p
-                style="text-align: center; margin-top: 1rem; color: #6b7280; font-size: 0.875rem;"
-            >
+
+            <div class="toggle-action">
+                <p>
+                    {isRegistering
+                        ? "Already have an account?"
+                        : "Need an account?"}
+                    <button
+                        type="button"
+                        class="link-button"
+                        on:click={toggleMode}
+                    >
+                        {isRegistering ? "Login here" : "Register here"}
+                    </button>
+                </p>
+            </div>
+
+            <p class="backend-msg">
                 Backend says: {backendMessage}
             </p>
         </div>
@@ -154,7 +249,15 @@
             0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
 
-    .password-card {
+    .form-title {
+        font-size: 1.5rem;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        text-align: center;
+        color: #374151;
+    }
+
+    .input-group {
         margin-bottom: 1.5rem;
     }
 
@@ -191,7 +294,6 @@
     }
 
     button {
-        width: 100%;
         padding: 0.75rem;
         border: none;
         border-radius: 0.5rem;
@@ -202,6 +304,7 @@
     }
 
     .user-login-button {
+        width: 100%;
         color: white;
         background-color: #2563eb;
     }
@@ -210,12 +313,61 @@
         background-color: #1d4ed8;
     }
 
-    .guest-login-button {
-        color: #374151;
-        background-color: #f3f4f6;
+    .toggle-action {
+        text-align: center;
+        font-size: 0.875rem;
+        color: #6b7280;
     }
 
-    .guest-login-button:hover {
-        background-color: #e5e7eb;
+    .link-button {
+        background: none;
+        border: none;
+        color: #2563eb;
+        cursor: pointer;
+        padding: 0;
+        font: inherit;
+        text-decoration: underline;
+        width: auto;
+    }
+
+    .link-button:hover {
+        color: #1d4ed8;
+        background: none;
+    }
+
+    .backend-msg {
+        text-align: center;
+        margin-top: 1rem;
+        color: #6b7280;
+        font-size: 0.75rem;
+    }
+
+    /* Error Styling */
+    .error-msg {
+        color: #ef4444;
+        font-size: 0.8rem;
+        margin-top: 0.25rem;
+        display: block;
+    }
+
+    input.invalid {
+        border-color: #ef4444;
+        background-color: #fef2f2;
+    }
+
+    input.invalid:focus {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+    }
+
+    .general-error {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        background-color: #fef2f2;
+        border: 1px solid #fee2e2;
+        color: #b91c1c;
+        text-align: center;
+        font-size: 0.9rem;
     }
 </style>
