@@ -1,33 +1,64 @@
 import { writable } from 'svelte/store';
 
 /**
+ * @typedef {Object} User
+ * @property {number} id
+ * @property {string} email
+ * @property {boolean} is_active
+ * @property {boolean} is_admin
+ * @property {string|null} created_at
+ * @property {string|null} last_login
+ */
+
+/**
  * @typedef {Object} AuthState
- * @property {object|null} user
+ * @property {User|null} user
  * @property {boolean} isAuthenticated
+ * @property {boolean} isAdmin
+ * @property {boolean} isLoading - True while checking auth status
  */
 
 /** @type {AuthState} */
 const initialState = {
     user: null,
-    isAuthenticated: false
+    isAuthenticated: false,
+    isAdmin: false,
+    isLoading: true  // Start as loading until we check auth
 };
 
 export const auth = writable(initialState);
 
 /**
- * Login action
- * @param {object} userData - User information
+ * Login action - sets the user as authenticated
+ * @param {User} userData - User information from the server
  */
 export const login = (userData) => {
     auth.set({
         user: userData,
-        isAuthenticated: true
+        isAuthenticated: true,
+        isAdmin: userData.is_admin || false,
+        isLoading: false
     });
 };
 
 /**
- * Logout action
+ * Logout action - clears all auth state
  */
 export const logout = () => {
-    auth.set(initialState);
+    auth.set({
+        user: null,
+        isAuthenticated: false,
+        isAdmin: false,
+        isLoading: false
+    });
+};
+
+/**
+ * Set loading state to false (used when auth check completes)
+ */
+export const setAuthLoaded = () => {
+    auth.update(state => ({
+        ...state,
+        isLoading: false
+    }));
 };

@@ -2,10 +2,17 @@
     import { onMount, afterUpdate, tick } from "svelte";
     import { marked } from "marked";
     import api from "$lib/api";
+    import { auth, login, setAuthLoaded } from "../../stores/auth.js";
 
     // =========================================================================
     // STATE MANAGEMENT
     // =========================================================================
+
+    // Authorization state
+    let authChecked = false;
+    let isAuthorized = false;
+    /** @type {string|null} */
+    let authError = null;
 
     // Array to store the chat history.
     // Structure: { sender: 'user' | 'ai', text: string, timestamp: Date }
@@ -32,6 +39,40 @@
     // =========================================================================
 
     onMount(async () => {
+        // First, check if user is authenticated and is admin
+        try {
+            const authRes = await api.post("/auth/me");
+
+            if (authRes.ok && authRes.data) {
+                // Update the auth store
+                login(authRes.data);
+
+                // Check if user is admin
+                if (authRes.data.is_admin) {
+                    isAuthorized = true;
+                    // Continue loading the page data
+                    await loadPageData();
+                } else {
+                    isAuthorized = false;
+                    authError =
+                        "You don't have permission to access this page. Admin access required.";
+                }
+            } else {
+                isAuthorized = false;
+                authError = "You must be logged in to access this page.";
+                setAuthLoaded();
+            }
+        } catch (e) {
+            console.error("Auth check failed", e);
+            isAuthorized = false;
+            authError = "Authentication check failed. Please log in again.";
+            setAuthLoaded();
+        }
+
+        authChecked = true;
+    });
+
+    async function loadPageData() {
         // Fetch available models and credits - encryption is automatic!
         try {
             const [gemRes, orRes, credRes] = await Promise.all([
@@ -59,7 +100,7 @@
                 timestamp: new Date(),
             },
         ];
-    });
+    }
 
     function updateSelectedModel() {
         if (selectedProvider === "gemini") {
@@ -77,7 +118,9 @@
         // Default behavior: Keep chat scrolled to bottom if we are near the bottom
         // or if a new message arrived that isn't the specific "user question at top" case
         // We handle specific scrolling in sendMessage, but this ensures general visibility
-        scrollToBottom();
+        if (isAuthorized) {
+            scrollToBottom();
+        }
     });
 
     function scrollToBottom() {
@@ -187,126 +230,240 @@
     TEMPLATE STRUCTURE
     =========================================================================
 -->
-<div class="chat-layout">
-    <header class="chat-header">
-        <div class="header-left">
-            <h2>Bingo AI</h2>
-            {#if credits}
-                <div class="credits-display">
-                    <span class="label">Usage:</span> ${Number(
-                        credits.total_usage,
-                    ).toFixed(2)}
-                    {#if credits.total_credits}
-                        <span class="divider">/</span>
-                        <span class="label">Limit:</span>
-                        ${Number(credits.total_credits).toFixed(2)}
-                        <span class="remaining"
-                            >(${(
-                                credits.total_credits - credits.total_usage
-                            ).toFixed(2)} left)</span
-                        >
-                    {/if}
-                </div>
-            {/if}
 
-            <div class="model-selectors-group">
-                <div class="model-selectors">
-                    <!-- Provider Selector -->
-                    <select
-                        bind:value={selectedProvider}
-                        on:change={updateSelectedModel}
-                        class="model-select provider-select"
-                    >
-                        <option value="gemini">Google Gemini</option>
-                        <option value="openrouter">OpenRouter</option>
-                    </select>
-
-                    <!-- Model Selector -->
-                    <select bind:value={selectedModel} class="model-select">
-                        {#if selectedProvider === "gemini"}
-                            {#each geminiModels as model}
-                                <option value={model}
-                                    >{model.replace("models/", "")}</option
-                                >
-                            {/each}
-                        {:else}
-                            {#each openRouterModels as model}
-                                <option value={model.id}>{model.name}</option>
-                            {/each}
+{#if !authChecked}
+    <!-- Loading state while checking authorization -->
+    <div class="auth-loading">
+        <div class="loading-spinner"></div>
+        <p>Checking authorization...</p>
+    </div>
+{:else if !isAuthorized}
+    <!-- Unauthorized view -->
+    <div class="unauthorized-container">
+        <div class="unauthorized-card">
+            <div class="unauthorized-icon">🔒</div>
+            <h1>Access Denied</h1>
+            <p class="error-message">{authError}</p>
+            <p class="help-text">
+                This page is restricted to administrators only. If you believe
+                you should have access, please contact the system administrator.
+            </p>
+            <a href="/home" class="back-button">← Go Back Home</a>
+        </div>
+    </div>
+{:else}
+    <!-- Authorized admin view - the actual chat interface -->
+    <div class="chat-layout">
+        <header class="chat-header">
+            <div class="header-left">
+                <h2>Bingo AI</h2>
+                {#if credits}
+                    <div class="credits-display">
+                        <span class="label">Usage:</span> ${Number(
+                            credits.total_usage,
+                        ).toFixed(2)}
+                        {#if credits.total_credits}
+                            <span class="divider">/</span>
+                            <span class="label">Limit:</span>
+                            ${Number(credits.total_credits).toFixed(2)}
+                            <span class="remaining"
+                                >(${(
+                                    credits.total_credits - credits.total_usage
+                                ).toFixed(2)} left)</span
+                            >
                         {/if}
-                    </select>
-                </div>
-                {#if selectedProvider === "openrouter" && currentORModel && currentORModel.pricing}
-                    <div class="pricing-info">
-                        <span class="price-tag"
-                            >Input: ${currentORModel.pricing.prompt}</span
-                        >
-                        <span class="price-tag"
-                            >Output: ${currentORModel.pricing.completion}</span
-                        >
                     </div>
                 {/if}
+
+                <div class="model-selectors-group">
+                    <div class="model-selectors">
+                        <!-- Provider Selector -->
+                        <select
+                            bind:value={selectedProvider}
+                            on:change={updateSelectedModel}
+                            class="model-select provider-select"
+                        >
+                            <option value="gemini">Google Gemini</option>
+                            <option value="openrouter">OpenRouter</option>
+                        </select>
+
+                        <!-- Model Selector -->
+                        <select bind:value={selectedModel} class="model-select">
+                            {#if selectedProvider === "gemini"}
+                                {#each geminiModels as model}
+                                    <option value={model}
+                                        >{model.replace("models/", "")}</option
+                                    >
+                                {/each}
+                            {:else}
+                                {#each openRouterModels as model}
+                                    <option value={model.id}
+                                        >{model.name}</option
+                                    >
+                                {/each}
+                            {/if}
+                        </select>
+                    </div>
+                    {#if selectedProvider === "openrouter" && currentORModel && currentORModel.pricing}
+                        <div class="pricing-info">
+                            <span class="price-tag"
+                                >Input: ${currentORModel.pricing.prompt}</span
+                            >
+                            <span class="price-tag"
+                                >Output: ${currentORModel.pricing
+                                    .completion}</span
+                            >
+                        </div>
+                    {/if}
+                </div>
             </div>
+        </header>
+
+        <!-- 
+            Message History Area 
+            - Scrolls automatically when new messages arrive (needs implementation)
+            - Renders different styles for 'user' vs 'ai'
+        -->
+        <div class="messages-area" bind:this={chatContainer}>
+            {#each messages as msg}
+                <div class="message-wrapper {msg.sender}">
+                    <div class="message-bubble">
+                        <div class="markdown-content">
+                            {@html marked.parse(msg.text)}
+                        </div>
+                        <span class="timestamp">
+                            {msg.timestamp.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                            })}
+                        </span>
+                    </div>
+                </div>
+            {/each}
+
+            {#if isLoading}
+                <div class="message-wrapper ai">
+                    <div class="message-bubble loading">
+                        <div class="typing-indicator">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            {/if}
         </div>
-    </header>
 
-    <!-- 
-        Message History Area 
-        - Scrolls automatically when new messages arrive (needs implementation)
-        - Renders different styles for 'user' vs 'ai'
-    -->
-    <div class="messages-area" bind:this={chatContainer}>
-        {#each messages as msg}
-            <div class="message-wrapper {msg.sender}">
-                <div class="message-bubble">
-                    <div class="markdown-content">
-                        {@html marked.parse(msg.text)}
-                    </div>
-                    <span class="timestamp">
-                        {msg.timestamp.toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                        })}
-                    </span>
-                </div>
-            </div>
-        {/each}
-
-        {#if isLoading}
-            <div class="message-wrapper ai">
-                <div class="message-bubble loading">
-                    <div class="typing-indicator">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </div>
-                </div>
-            </div>
-        {/if}
+        <!-- 
+            Input Area
+            - Textarea for multi-line support
+            - Send button
+        -->
+        <div class="input-area">
+            <textarea
+                bind:value={currentMessage}
+                on:keydown={handleKeydown}
+                placeholder="Type your message here..."
+                rows="1"
+            ></textarea>
+            <button
+                on:click={sendMessage}
+                disabled={isLoading || !currentMessage.trim()}
+            >
+                Send
+            </button>
+        </div>
     </div>
-
-    <!-- 
-        Input Area
-        - Textarea for multi-line support
-        - Send button
-    -->
-    <div class="input-area">
-        <textarea
-            bind:value={currentMessage}
-            on:keydown={handleKeydown}
-            placeholder="Type your message here..."
-            rows="1"
-        ></textarea>
-        <button
-            on:click={sendMessage}
-            disabled={isLoading || !currentMessage.trim()}
-        >
-            Send
-        </button>
-    </div>
-</div>
+{/if}
 
 <style>
+    /* 
+     * AUTHORIZATION STATES
+    */
+
+    .auth-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: calc(100vh - 9rem);
+        gap: 1rem;
+        color: #6b7280;
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .unauthorized-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: calc(100vh - 9rem);
+        padding: 2rem;
+    }
+
+    .unauthorized-card {
+        background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+        border: 1px solid #fecaca;
+        border-radius: 1rem;
+        padding: 3rem;
+        max-width: 500px;
+        text-align: center;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .unauthorized-icon {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+    }
+
+    .unauthorized-card h1 {
+        color: #991b1b;
+        font-size: 1.75rem;
+        margin: 0 0 1rem 0;
+    }
+
+    .error-message {
+        color: #b91c1c;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        font-weight: 500;
+    }
+
+    .help-text {
+        color: #6b7280;
+        font-size: 0.875rem;
+        margin-bottom: 1.5rem;
+        line-height: 1.5;
+    }
+
+    .back-button {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background-color: #1f2937;
+        color: white;
+        text-decoration: none;
+        border-radius: 0.5rem;
+        font-weight: 500;
+        transition: background-color 0.2s;
+    }
+
+    .back-button:hover {
+        background-color: #374151;
+    }
+
     /* 
      * BASIC STYLING
      * Designed to be clean and minimal. 

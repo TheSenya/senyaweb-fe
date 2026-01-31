@@ -4,10 +4,30 @@
     import { login } from "../stores/auth.js";
     import { PUBLIC_BACKEND_URL } from "$env/static/public";
     import { encryptRequest, decryptResponse } from "$lib/encryption";
+    import api from "$lib/api";
 
     let backendMessage = "Connecting...";
+    let isCheckingAuth = true; // Show loading while checking auth
 
     onMount(async () => {
+        // First, check if user is already logged in
+        try {
+            const authRes = await api.post("/auth/me");
+
+            if (authRes.ok && authRes.data) {
+                // User is already authenticated, redirect to home
+                console.log("User already authenticated, redirecting to /home");
+                goto("/home");
+                return;
+            }
+        } catch (e) {
+            // Not authenticated, that's expected - show login form
+            console.log("User not authenticated, showing login form");
+        }
+
+        isCheckingAuth = false;
+
+        // Check backend health
         try {
             const res = await fetch(`${PUBLIC_BACKEND_URL}/health`);
             if (res.ok) {
@@ -107,8 +127,16 @@
 
             if (res.ok) {
                 if (data.success) {
-                    // Auto-login after register, or normal login
-                    login({ role: "user", username: email });
+                    // Fetch full user data after successful login/register
+                    try {
+                        const meRes = await api.post("/auth/me");
+                        if (meRes.ok && meRes.data) {
+                            login(meRes.data);
+                        }
+                    } catch (e) {
+                        // Login was successful, just couldn't get full user data
+                        console.warn("Couldn't fetch user data after login");
+                    }
                     goto("/home");
                 } else {
                     generalError = isRegistering
@@ -144,74 +172,86 @@
     }
 </script>
 
-<main>
-    <h1 class="welcome">Welcome to SenyaWeb</h1>
-    <form class="access-card" on:submit|preventDefault={handleSubmit}>
-        <h2 class="form-title">{isRegistering ? "Create Account" : "Login"}</h2>
-
-        <div class="input-group">
-            <label for="email">Email</label>
-            <input
-                type="email"
-                id="email"
-                placeholder="Enter Email..."
-                bind:value={email}
-                on:blur={validateEmail}
-                on:input={() => emailError && validateEmail()}
-                class:invalid={emailError}
-            />
-            {#if emailError}
-                <span class="error-msg">{emailError}</span>
-            {/if}
+{#if isCheckingAuth}
+    <!-- Loading state while checking if user is already authenticated -->
+    <main>
+        <div class="auth-loading">
+            <div class="loading-spinner"></div>
+            <p>Checking authentication...</p>
         </div>
-        <div class="input-group">
-            <label for="password">Password</label>
-            <input
-                type="password"
-                id="password"
-                placeholder="Enter Password..."
-                bind:value={password}
-                on:blur={validatePassword}
-                on:input={() => passwordError && validatePassword()}
-                class:invalid={passwordError}
-            />
-            {#if passwordError}
-                <span class="error-msg">{passwordError}</span>
-            {/if}
-        </div>
+    </main>
+{:else}
+    <main>
+        <h1 class="welcome">Welcome to SenyaWeb</h1>
+        <form class="access-card" on:submit|preventDefault={handleSubmit}>
+            <h2 class="form-title">
+                {isRegistering ? "Create Account" : "Login"}
+            </h2>
 
-        {#if generalError}
-            <div class="general-error">{generalError}</div>
-        {/if}
-
-        <div class="action-card">
-            <div class="real-user-action">
-                <button class="user-login-button" type="submit">
-                    {isRegistering ? "Register" : "Login"}
-                </button>
+            <div class="input-group">
+                <label for="email">Email</label>
+                <input
+                    type="email"
+                    id="email"
+                    placeholder="Enter Email..."
+                    bind:value={email}
+                    on:blur={validateEmail}
+                    on:input={() => emailError && validateEmail()}
+                    class:invalid={emailError}
+                />
+                {#if emailError}
+                    <span class="error-msg">{emailError}</span>
+                {/if}
+            </div>
+            <div class="input-group">
+                <label for="password">Password</label>
+                <input
+                    type="password"
+                    id="password"
+                    placeholder="Enter Password..."
+                    bind:value={password}
+                    on:blur={validatePassword}
+                    on:input={() => passwordError && validatePassword()}
+                    class:invalid={passwordError}
+                />
+                {#if passwordError}
+                    <span class="error-msg">{passwordError}</span>
+                {/if}
             </div>
 
-            <div class="toggle-action">
-                <p>
-                    {isRegistering
-                        ? "Already have an account?"
-                        : "Need an account?"}
-                    <button
-                        type="button"
-                        class="link-button"
-                        on:click={toggleMode}
-                    >
-                        {isRegistering ? "Login here" : "Register here"}
+            {#if generalError}
+                <div class="general-error">{generalError}</div>
+            {/if}
+
+            <div class="action-card">
+                <div class="real-user-action">
+                    <button class="user-login-button" type="submit">
+                        {isRegistering ? "Register" : "Login"}
                     </button>
+                </div>
+
+                <div class="toggle-action">
+                    <p>
+                        {isRegistering
+                            ? "Already have an account?"
+                            : "Need an account?"}
+                        <button
+                            type="button"
+                            class="link-button"
+                            on:click={toggleMode}
+                        >
+                            {isRegistering ? "Login here" : "Register here"}
+                        </button>
+                    </p>
+                </div>
+
+                <p class="backend-msg">
+                    Backend says: {backendMessage}
                 </p>
             </div>
-
-            <p class="backend-msg">
-                Backend says: {backendMessage}
-            </p>
-        </div>
-    </form>
-</main>
+        </form>
+    </main>
+{/if}
 
 <style>
     :global(body) {
@@ -369,5 +409,31 @@
         color: #b91c1c;
         text-align: center;
         font-size: 0.9rem;
+    }
+
+    /* Loading state */
+    .auth-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        gap: 1rem;
+        color: #6b7280;
+    }
+
+    .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
     }
 </style>
