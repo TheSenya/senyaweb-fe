@@ -50,11 +50,13 @@ async function encryptedFetch<T = any>(
         });
 
         // Send as encrypted POST
+        // IMPORTANT: credentials: 'include' is required for cross-origin cookie handling
         const res = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',  // Send/receive cookies for cross-origin requests
             body: JSON.stringify({ content: encryptedContent }),
         });
 

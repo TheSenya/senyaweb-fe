@@ -112,6 +112,7 @@
                 headers: {
                     "Content-Type": "application/json",
                 },
+                credentials: "include", // Essential for cookies to be set/sent
                 body: JSON.stringify({ content: encryptedContent }),
             });
 

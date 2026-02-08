@@ -16,12 +16,18 @@
     });
 
     async function handleLogout() {
-        // Mock backend call placeholder
         console.log("Logging out...");
-        await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate delay
 
-        logout(); // clear store
-        goto("/"); // Redirect to login
+        // Call backend to clear cookies
+        try {
+            const api = await import("$lib/api");
+            await api.default.post("/auth/logout");
+        } catch (e) {
+            console.warn("Backend logout failed, continuing with local logout");
+        }
+
+        logout(); // Clear frontend store
+        goto("/"); // Redirect to login page
     }
 </script>
 
