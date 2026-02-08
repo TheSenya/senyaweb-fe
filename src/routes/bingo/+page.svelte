@@ -475,11 +475,8 @@
         height: calc(
             100vh - 9rem
         ); /* Fit screen: 100vh - (header ~3.5rem + padding 4rem + slack) */
-        max-width: 800px;
-        margin: 0 auto; /* Centered */
+        width: 100%;
         background-color: white;
-        border-left: 1px solid #e5e7eb;
-        border-right: 1px solid #e5e7eb;
     }
 
     .chat-header {
@@ -604,7 +601,7 @@
     }
 
     .message-bubble {
-        max-width: 70%;
+        max-width: 100%;
         padding: 0.75rem 1rem;
         border-radius: 1rem;
         position: relative;
@@ -621,6 +618,8 @@
         background-color: #f3f4f6;
         color: #1f2937;
         border-bottom-left-radius: 0.25rem;
+        max-width: 100%;
+        width: 100%;
     }
 
     .message-wrapper.system .message-bubble {
@@ -644,6 +643,7 @@
         display: flex;
         gap: 0.5rem;
         background-color: #fff;
+        flex: 0 0 auto; /* Don't shrink, take natural height */
     }
 
     textarea {
@@ -651,7 +651,7 @@
         padding: 0.75rem;
         border: 1px solid #d1d5db;
         border-radius: 0.5rem;
-        resize: none; /* Disable manual resize */
+        resize: vertical; /* Allow vertical resize */
         font-family: inherit;
     }
 
